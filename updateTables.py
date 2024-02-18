@@ -1,4 +1,7 @@
 import boto3
+from botocore.exceptions import ClientError
+from googleapiclient.discovery import build
+from google.oauth2 import service_account
 
 # note to self: move this stuff elsewhere later
 # connect to DynamoDB
@@ -7,32 +10,93 @@ dynamodb = boto3.resource('dynamodb')
 # get the tables
 table_new = dynamodb.Table('ap_events_new')
 table_old = dynamodb.Table('ap_events_old')
-table_changes = dynamodb.Table('ap_events_changes')
 
-# compare ap_events_new and ap_events_old tables, only comparing the date and time ranges and no other fields
-# if there are any differences, output the differences to the ap_events_changes table
-# still need to add update/delete flag logic, for when the entire event is gone or just the time range is updated
-def compare_tables():
- 
-  # Get the items from the tables
-  items_new = table_new.scan()['Items']
-  items_old = table_old.scan()['Items']
-  
-  # Compare the items
-  for item_new in items_new:
-    for item_old in items_old:
-      if item_new['start'] == item_old['start'] and item_new['end'] == item_old['end']:
-        # The items are the same
-        break
-    else:
-      # The item is not in the old table
-      table_changes.put_item(Item=item_new)
-  
-  for item_old in items_old:
-    for item_new in items_new:
-      if item_old['start'] == item_new['start'] and item_old['end'] == item_new['end']:
-        # The items are the same
-        break
-    else:
-      # The item is not in the new table
-      table_changes.put_item(Item=item_old)
+# get our Google OAuth Client ID/Secret from AWS Secrets Manager
+def get_secret():
+    global google_oauth_client_id
+    global google_oauth_client_secret
+
+    secret_name = "googleOAuthCalendar"
+    region_name = "us-east-1"
+
+    # Create a Secrets Manager client
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        region_name=region_name
+    )
+
+    secret_response = client.get_secret_value(SecretId=secret_name)
+    secret_string = secret_response['SecretString']
+    secret_dict = json.loads(secret_string)  # Assuming JSON format
+    google_oauth_client_id = secret_dict['google_oauth_client_id']
+    google_oauth_secret_id = secret_dict['google_oauth_secret_id']
+
+def update_calendar_events():
+    # Get items from old and new tables
+    old_table_items = get_table_items('ap_events_old')
+    new_table_items = get_table_items('ap_events_new')
+
+    # Compare date and time ranges
+    old_dates = {(item['date'], item['time']) for item in old_table_items}
+    new_dates = {(item['date'], item['time']) for item in new_table_items}
+
+    if old_dates != new_dates:
+        # Delete old events from Google Calendar
+        for item in old_table_items:
+            delete_gcal_event(item['GCalID'])
+
+        # Add new events to Google Calendar and update new table with gcal event ids
+        for item in new_table_items:
+            gcal_event_id = add_gcal_event(item['date'], item['time'])
+            update_table_with_gcal_id('ap_events_new', item['GCalID'], gcal_event_id)
+
+        # Copy new table to old table and delete all items from new table
+        copy_table('ap_events_new', 'ap_events_old')
+        delete_table_items('ap_events_new')
+
+def get_table_items(table_name):
+    # Get all items from the table
+    table = dynamodb.Table(table_name)
+
+    return response['Items']
+
+def delete_gcal_event(event_id):
+    # Load the credentials from the 'credentials.json' file
+    credentials = service_account.Credentials.from_authorized_user_file('credentials.json')
+
+    # Build the service
+    service = build('calendar', 'v3', credentials=credentials)
+
+    # Delete the event
+    service.events().delete(calendarId='primary', eventId=event_id).execute()
+
+
+def add_gcal_event(date, time):
+    # Load the credentials from the 'credentials.json' file
+    credentials = service_account.Credentials.from_authorized_user_file('credentials.json')
+
+    # Build the service
+    service = build('calendar', 'v3', credentials=credentials)
+
+    # Define the event
+    event = {
+        'summary': 'New Event',
+        'start': {
+            'dateTime': datetime.strptime(date + ' ' + time, '%Y-%m-%d %H:%M:%S').isoformat(),
+            'timeZone': 'America/Los_Angeles',
+        },
+        'end': {
+            'dateTime': (datetime.strptime(date + ' ' + time, '%Y-%m-%d %H:%M:%S') + timedelta(hours=1)).isoformat(),
+            'timeZone': 'America/Los_Angeles',
+        },
+    }
+
+    # Add the event to the calendar
+    event = service.events().insert(calendarId='primary', body=event).execute()
+
+    # Return the ID of the new event
+    return event['id']
+
+def lambda_handler(event, context):
+  get_secret()
