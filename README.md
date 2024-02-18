@@ -11,7 +11,7 @@ Current Status: NOT WORKING - still in development
 Currently we are successfully querying the astrospheric API for the forecast and hopefully writing date/time ranges that meet our predefined requirements to DynamoDB.
 
 TO-DO:
-* Finish code for new/old comparison and generate corrected changes table
-* Actual GCal integration
+* Test code for new/old comparison and calendar event changes
+* Test GCal integration
 * Finish migrating to environment variables
 * Add more tests/etc
