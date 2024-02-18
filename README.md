@@ -13,4 +13,4 @@ Currently we are successfully querying the astrospheric API for the forecast and
 TO-DO:
 * Finish code for new/old comparison and generate corrected changes table
 * Actual GCal integration
-* Move secrets into secret manager
+* Setup proper environment variables
