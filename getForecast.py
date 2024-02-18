@@ -73,12 +73,17 @@ def time_in_range(start, end, current):
     """Returns whether current is in the range [start, end]"""
     return start <= current <= end
 
-# populate the ap_events_new table in the database with the events
+# populate_table function to populate the ap_events_new table in the dynamodb database with the events
 def populate_table(events):
-  # Write events to the table
+  # Write items to the table
   with table_new.batch_writer() as batch:
-    for event in events:
-      batch.put_item(Item=event)
+      for event in events:
+          # Convert start and end times to strings and set GCalID to "none"
+          item = {
+              'times': f"{event['start_time']} - {event['end_time']}",
+              'GCalID': 'none'
+          }
+          batch.put_item(Item=item)
 
 def lambda_handler(event, context):
   get_forecast()
