@@ -1,6 +1,6 @@
 # astro-gcal
 automatically create/manage events on your google calendar based on forecasts from astrospheric
-This is intended to be run out of AWS, using a series of Lambdas and a DB of some sort.
+This is intended to be run out of AWS, using a series of Lambdas and DynamoDB.
 
 
 Current Status: NOT WORKING - still in development
