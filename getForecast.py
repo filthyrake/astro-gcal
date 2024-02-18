@@ -90,44 +90,13 @@ dynamodb = boto3.resource('dynamodb')
   
 # get the tables
 table_new = dynamodb.Table('ap_events_new')
-table_old = dynamodb.Table('ap_events_old')
-table_changes = dynamodb.Table('ap_events_changes')
 
 # populate the ap_events_new table in the database with the events
 def populate_table(events):
-  # write events to the table
+  # Write events to the table
   with table_new.batch_writer() as batch:
     for event in events:
       batch.put_item(Item=event)
-
-# compare ap_events_new and ap_events_old tables, only comparing the date and time ranges and no other fields
-# if there are any differences, output the differences to the ap_events_changes table
-# still need to add update/delete flag logic, for when the entire event is gone or just the time range is updated
-def compare_tables():
- 
-  # get the items from the tables
-  items_new = table_new.scan()['Items']
-  items_old = table_old.scan()['Items']
-  
-  # compare the items
-  for item_new in items_new:
-    for item_old in items_old:
-      if item_new['start'] == item_old['start'] and item_new['end'] == item_old['end']:
-        # the items are the same
-        break
-    else:
-      # the item is not in the old table
-      table_changes.put_item(Item=item_new)
-  
-  for item_old in items_old:
-    for item_new in items_new:
-      if item_old['start'] == item_new['start'] and item_old['end'] == item_new['end']:
-        # the items are the same
-        break
-    else:
-      # the item is not in the new table
-      table_changes.put_item(Item=item_old)
-
 
 # populate "new" table in database
 populate_table(events)
