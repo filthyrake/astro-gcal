@@ -30,7 +30,7 @@ good_seeing_transparency_clouds_offsets=[]
 final_good_offsets=[]
 
 # Let's set our location for the astral library
-city = LocationInfo("Antioch", "California", "America/Los_Angeles", LAT, LONG)
+city = LocationInfo("<city>", "<state>", "America/Los_Angeles", LAT, LONG)
 antioch = Location(city)
 
 
