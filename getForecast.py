@@ -1,6 +1,7 @@
 import json
 import requests
 import boto3
+import os
 from botocore.exceptions import ClientError
 from pytz import timezone
 from astral import LocationInfo
@@ -11,8 +12,8 @@ from operator import itemgetter
 from datetime import datetime, timedelta
 
 API_URL="https://astrosphericpublicaccess.azurewebsites.net/api/GetForecastData_V1"
-LAT="<YOUR_LAT>"
-LONG="<YOUR_LONG>"
+LAT = os.environ.get('LAT')
+LONG = os.environ.get('LONG')
 json_object = json.loads('{}') 
 
 time_zone = timezone('America/Los_Angeles')
