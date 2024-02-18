@@ -13,4 +13,5 @@ Currently we are successfully querying the astrospheric API for the forecast and
 TO-DO:
 * Finish code for new/old comparison and generate corrected changes table
 * Actual GCal integration
-* Setup proper environment variables
+* Finish migrating to environment variables
+* Add more tests/etc
