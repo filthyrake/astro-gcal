@@ -15,3 +15,5 @@ TO-DO:
 * Test GCal integration
 * Finish migrating to environment variables
 * Add more tests/etc
+
+Why havent I finished all this yet?  Well, testing is a bit tricky since the weather for my house is actually quite poor at the moment :D so the API doesnt return any events that meet my criteria within the time window it returns.  So I've gotta wait and then I can test and bugfix further.
