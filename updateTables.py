@@ -1,7 +1,9 @@
 import boto3
+import json
 from botocore.exceptions import ClientError
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
+from datetime import datetime, timedelta
 
 # note to self: move this stuff elsewhere later
 # connect to DynamoDB
@@ -35,7 +37,7 @@ def get_secret():
 def get_table_items(table_name):
     # Get all items from the table
     table = dynamodb.Table(table_name)
-
+    response = table.scan()  
     return response['Items']
 
 def delete_gcal_event(event_id):
