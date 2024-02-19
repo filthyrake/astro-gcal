@@ -20,7 +20,7 @@ MY_STATE = os.environ.get('STATE')
 MY_TIMEZONE = os.environ.get('TIMEZONE')
 json_object = json.loads('{}') 
 
-time_zone = timezone('America/Los_Angeles')
+time_zone = timezone(MY_TIMEZONE)
 
 def get_forecast():
   global json_object
