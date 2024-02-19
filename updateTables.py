@@ -5,6 +5,11 @@ from googleapiclient.discovery import build
 from google.oauth2 import service_account
 from datetime import datetime, timedelta
 
+credentials = service_account.Credentials.from_service_account_file(
+    'credentials.json',
+    scopes=['https://www.googleapis.com/auth/calendar']
+)
+
 # note to self: move this stuff elsewhere later
 # connect to DynamoDB
 dynamodb = boto3.resource('dynamodb')
@@ -16,7 +21,7 @@ table_old = dynamodb.Table('ap_events_old')
 # get our Google OAuth Client ID/Secret from AWS Secrets Manager
 def get_secret():
     global google_oauth_client_id
-    global google_oauth_client_secret
+    global google_oauth_secret_id
 
     secret_name = "googleOAuthCalendar"
     region_name = "us-east-1"
@@ -41,9 +46,6 @@ def get_table_items(table_name):
     return response['Items']
 
 def delete_gcal_event(event_id):
-    # Load the credentials from the 'credentials.json' file
-    credentials = service_account.Credentials.from_authorized_user_file('credentials.json')
-
     # Build the service
     service = build('calendar', 'v3', credentials=credentials)
 
@@ -51,10 +53,7 @@ def delete_gcal_event(event_id):
     service.events().delete(calendarId='primary', eventId=event_id).execute()
 
 
-def add_gcal_event(date, time):
-    # Load the credentials from the 'credentials.json' file
-    credentials = service_account.Credentials.from_authorized_user_file('credentials.json')
-
+def add_gcal_event(start_time, end_time):
     # Build the service
     service = build('calendar', 'v3', credentials=credentials)
 
@@ -62,11 +61,11 @@ def add_gcal_event(date, time):
     event = {
         'summary': 'New Event',
         'start': {
-            'dateTime': datetime.strptime(date + ' ' + time, '%Y-%m-%d %H:%M:%S').isoformat(),
+            'dateTime': datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S').isoformat(),
             'timeZone': 'America/Los_Angeles',
         },
         'end': {
-            'dateTime': (datetime.strptime(date + ' ' + time, '%Y-%m-%d %H:%M:%S') + timedelta(hours=1)).isoformat(),
+            'dateTime': datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S').isoformat(),
             'timeZone': 'America/Los_Angeles',
         },
     }
@@ -76,34 +75,6 @@ def add_gcal_event(date, time):
 
     # Return the ID of the new event
     return event['id']
-
-def update_table_with_gcal_id(table_name, item_id, gcal_event_id):
-    # Get the table
-    table = dynamodb.Table(table_name)
-
-    # Update the item with the Google Calendar event ID
-    table.update_item(
-        Key={
-            'gCalID': item_id
-        },
-        UpdateExpression='SET gCalID = :val1',
-        ExpressionAttributeValues={
-            ':val1': gcal_event_id
-        }
-    )
-
-def copy_table(source_table_name, destination_table_name):
-    # Get the source and destination tables
-    source_table = dynamodb.Table(source_table_name)
-    destination_table = dynamodb.Table(destination_table_name)
-
-    # Scan the source table
-    response = source_table.scan()
-
-    # Write each item to the destination table
-    with destination_table.batch_writer() as batch:
-        for item in response['Items']:
-            batch.put_item(Item=item)
 
 def delete_table_items(table_name):
     # Get the table
@@ -136,14 +107,23 @@ def update_calendar_events():
         for item in old_table_items:
             delete_gcal_event(item['gCalID'])
 
-        # Add new events to Google Calendar and update new table with gcal event ids
+        # Add new events to Google Calendar and store new items with gcal event ids in a temporary dictionary
+        new_items_with_gcal_id = []
         for item in new_table_items:
             start_time, end_time = item['times'].split(' - ')
             gcal_event_id = add_gcal_event(start_time, end_time)
-            update_table_with_gcal_id('ap_events_new', item['gCalID'], gcal_event_id)
+            item['gCalID'] = gcal_event_id
+            new_items_with_gcal_id.append(item)
 
-        # Copy new table to old table and delete all items from new table
-        copy_table('ap_events_new', 'ap_events_old')
+        # Delete all items from old table
+        delete_table_items('ap_events_old')
+
+        # Write new items with gcal event ids to old table
+        with table_old.batch_writer() as batch:
+            for item in new_items_with_gcal_id:
+                batch.put_item(Item=item)
+
+        # Delete all items from new table
         delete_table_items('ap_events_new')
 
 def lambda_handler(event, context):
