@@ -2,6 +2,7 @@ import json
 import requests
 import boto3
 import os
+import logging
 from botocore.exceptions import ClientError
 from pytz import timezone
 from astral import LocationInfo
@@ -27,6 +28,7 @@ def get_forecast():
   response = requests.post(API_URL, data=json.dumps(data), headers=headers)
   
   json_object = response.json()
+  print(json_object)
 
 good_seeing_offsets=[]
 good_seeing_transparency_offsets=[]
@@ -34,7 +36,7 @@ good_seeing_transparency_clouds_offsets=[]
 final_good_offsets=[]
 
 # Let's set our location for the astral library
-city = LocationInfo("<city>", "<state>", "America/Los_Angeles", LAT, LONG)
+city = LocationInfo("<YOUR_CITY>", "<YOUR_STATE>", "America/Los_Angeles", LAT, LONG)
 antioch = Location(city)
 
 # note to self: move this stuff elsewhere later
@@ -87,6 +89,7 @@ def populate_table(events):
           batch.put_item(Item=item)
 
 def lambda_handler(event, context):
+  logging.info('Lambda function started')
   get_forecast()
   start_time = datetime.fromisoformat(json_object["LocalStartTime"])
 
@@ -127,3 +130,4 @@ def lambda_handler(event, context):
 
   # populate "new" table in database
   populate_table(events)
+  logging.info('Lambda function completed')
