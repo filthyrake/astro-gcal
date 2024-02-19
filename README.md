@@ -6,14 +6,13 @@ I got tired of constantly keeping an Astrospheric tab open and checking it all t
 This is intended to be run out of AWS, using a series of Lambdas and DynamoDB.
 
 
-Current Status: NOT WORKING - still in development
+Current Status: NOT FULLY WORKING - still in development
 
 Currently we are successfully querying the astrospheric API for the forecast and hopefully writing date/time ranges that meet our predefined requirements to DynamoDB.
 
 TO-DO:
 * Test code for new/old comparison and calendar event changes
 * Test GCal integration
-* Finish migrating to environment variables
 * Add more tests/etc
 
 Why havent I finished all this yet?  Well, testing is a bit tricky since the weather for my house is actually quite poor at the moment :D so the API doesnt return any events that meet my criteria within the time window it returns.  So I've gotta wait and then I can test and bugfix further.
