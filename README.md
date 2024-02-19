@@ -13,7 +13,7 @@ Currently we are successfully querying the astrospheric API for the forecast and
 TO-DO:
 * Add more tests/etc
 * Write installation/usage instructions
-* See if there's an easier way to do some of this?  This has a LOT of steps involved to get up and running.  Maybe containerize it.
+* See if there's an easier way to do some of this?  This has a LOT of steps involved to get up and running.  Maybe containerize it.  I know this is broadly overengineered :D that was a bit intentional, but now I need to make it packageable.
 
 
 # Installation Instructions
