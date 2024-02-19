@@ -1,6 +1,7 @@
 import boto3
 import json
 import logging
+import os
 from botocore.exceptions import ClientError
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
@@ -8,6 +9,7 @@ from googleapiclient.errors import HttpError
 from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.DEBUG)
+cal_id = os.environ.get('googleCalendarID')
 
 credentials = service_account.Credentials.from_service_account_file(
     'credentials.json',
@@ -55,7 +57,7 @@ def delete_gcal_event(event_id):
 
     try:
         # Delete the event
-        service.events().delete(calendarId='primary', eventId=event_id).execute()
+        service.events().delete(calendarId=cal_id, eventId=event_id).execute()
     except HttpError as e:
         # Check if the error message contains "Resource has been deleted"
         if "Resource has been deleted" in str(e):
@@ -75,7 +77,7 @@ def add_gcal_event(start_time, end_time):
 
         # Define the event
         event = {
-            'summary': 'New Event',
+            'summary': 'Good Astro Weather',
             'start': {
                 'dateTime': datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S').isoformat(),
                 'timeZone': 'America/Los_Angeles',
@@ -86,8 +88,11 @@ def add_gcal_event(start_time, end_time):
             },
         }
 
+        # Log the event details
+        logging.debug(f"Event details: {event}")
+
         # Add the event to the calendar
-        event = service.events().insert(calendarId='primary', body=event).execute()
+        event = service.events().insert(calendarId=cal_id, body=event).execute()
 
         # Log the response from the Google Calendar API
         logging.debug(f"Response from Google Calendar API: {event}")
@@ -111,45 +116,47 @@ def delete_table_items(table_name):
             batch.delete_item(Key={'gCalID': item['gCalID']})
 
 def update_calendar_events():
-    # Get items from old and new tables
-    old_table_items = get_table_items('ap_events_old')
-    new_table_items = get_table_items('ap_events_new')
+    try:
+        # Get items from old and new tables
+        old_table_items = get_table_items('ap_events_old')
+        new_table_items = get_table_items('ap_events_new')
 
-    # Compare date and time ranges
-    old_dates = {(item['times'].split(' - ')[0], item['times'].split(' - ')[1]) for item in old_table_items}
-    new_dates = {(item['times'].split(' - ')[0], item['times'].split(' - ')[1]) for item in new_table_items}
+        # Compare date and time ranges
+        old_dates = {(item['times'].split(' - ')[0], item['times'].split(' - ')[1]) for item in old_table_items}
+        new_dates = {(item['times'].split(' - ')[0], item['times'].split(' - ')[1]) for item in new_table_items}
 
-    if not new_table_items:
-        for item in old_table_items:
-            delete_gcal_event(item['gCalID'])
-        return
+        if not new_table_items:
+            for item in old_table_items:
+                delete_gcal_event(item['gCalID'])
+            return
 
-    if old_dates != new_dates:
-        # Delete old events from Google Calendar
-        for item in old_table_items:
-            delete_gcal_event(item['gCalID'])
+        if old_dates != new_dates:
+            # Delete old events from Google Calendar
+            for item in old_table_items:
+                delete_gcal_event(item['gCalID'])
 
-        # Add new events to Google Calendar and store new items with gcal event ids in a temporary dictionary
-        new_items_with_gcal_id = []
-        for item in new_table_items:
-            start_time, end_time = item['times'].split(' - ')
-            gcal_event_id = add_gcal_event(start_time, end_time)
-            item['gCalID'] = gcal_event_id
-            new_items_with_gcal_id.append(item)
+            # Add new events to Google Calendar and store new items with gcal event ids in a temporary dictionary
+            new_items_with_gcal_id = []
+            for item in new_table_items:
+                start_time, end_time = item['times'].split(' - ')
+                gcal_event_id = add_gcal_event(start_time, end_time)
+                item['gCalID'] = gcal_event_id
+                new_items_with_gcal_id.append(item)
 
-        # Delete all items from old table
-        delete_table_items('ap_events_old')
+            # Delete all items from old table
+            delete_table_items('ap_events_old')
 
-        # Write new items with gcal event ids to old table
-        with table_old.batch_writer() as batch:
-            for item in new_items_with_gcal_id:
-                # Log the item being written to the table
-                logging.debug(f"Writing item to old table: {item}")
-                batch.put_item(Item=item)
+            # Write new items with gcal event ids to old table
+            with table_old.batch_writer() as batch:
+                for item in new_items_with_gcal_id:
+                    # Log the item being written to the table
+                    logging.debug(f"Writing item to old table: {item}")
+                    batch.put_item(Item=item)
 
         # Only delete items from new table if they have been successfully added to old table
-        for item in new_items_with_gcal_id:
-            delete_table_items('ap_events_new')
+        delete_table_items('ap_events_new')
+    except Exception as e:
+        logging.error(f"An error occurred while updating calendar events: {e}")
 
 def lambda_handler(event, context):
   get_secret()
