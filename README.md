@@ -13,3 +13,4 @@ Currently we are successfully querying the astrospheric API for the forecast and
 TO-DO:
 * Add more tests/etc
 * Write installation/usage instructions
+* See if there's an easier way to do some of this?  This has a LOT of steps involved to get up and running.  Maybe containerize it.
