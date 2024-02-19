@@ -15,6 +15,9 @@ from datetime import datetime, timedelta
 API_URL="https://astrosphericpublicaccess.azurewebsites.net/api/GetForecastData_V1"
 LAT = os.environ.get('LAT')
 LONG = os.environ.get('LONG')
+MY_CITY = os.environ.get('CITY')
+MY_STATE = os.environ.get('STATE')
+MY_TIMEZONE = os.environ.get('TIMEZONE')
 json_object = json.loads('{}') 
 
 time_zone = timezone('America/Los_Angeles')
@@ -36,8 +39,8 @@ good_seeing_transparency_clouds_offsets=[]
 final_good_offsets=[]
 
 # Let's set our location for the astral library
-city = LocationInfo("<YOUR_CITY>", "<YOUR_STATE>", "America/Los_Angeles", LAT, LONG)
-antioch = Location(city)
+city = LocationInfo(MY_CITY, MY_STATE, MY_TIMEZONE, LAT, LONG)
+final_city = Location(city)
 
 # note to self: move this stuff elsewhere later
 # connect to DynamoDB
@@ -110,9 +113,9 @@ def lambda_handler(event, context):
   for offset in good_seeing_transparency_clouds_offsets:
     offset_time = start_time + timedelta(hours=offset)
     offset_date = offset_time.date()
-    night_time = sun(city.observer, date=offset_date, tzinfo=antioch.timezone)
+    night_time = sun(city.observer, date=offset_date, tzinfo=final_city.timezone)
     dusk = night_time['dusk']
-    dawn_time = sun(city.observer, date=(offset_date + timedelta(days=1)), tzinfo=antioch.timezone)
+    dawn_time = sun(city.observer, date=(offset_date + timedelta(days=1)), tzinfo=final_city.timezone)
     dawn = dawn_time['dawn']  
     if (time_in_range(dusk, dawn, time_zone.localize(offset_time))):
       final_good_offsets.append(offset)
