@@ -32,7 +32,7 @@ def get_secret():
     secret_string = secret_response['SecretString']
     secret_dict = json.loads(secret_string)  # Assuming JSON format
     google_oauth_client_id = secret_dict['google_oauth_client_id']
-    google_oauth_secret_id = secret_dict['google_oauth_secret_id']
+    google_oauth_secret_id = secret_dict['google_oauth_client_secret']
 
 def get_table_items(table_name):
     # Get all items from the table
@@ -84,9 +84,9 @@ def update_table_with_gcal_id(table_name, item_id, gcal_event_id):
     # Update the item with the Google Calendar event ID
     table.update_item(
         Key={
-            'GCalID': item_id
+            'gCalID': item_id
         },
-        UpdateExpression='SET GCalID = :val1',
+        UpdateExpression='SET gCalID = :val1',
         ExpressionAttributeValues={
             ':val1': gcal_event_id
         }
@@ -115,7 +115,7 @@ def delete_table_items(table_name):
     # Delete each item
     with table.batch_writer() as batch:
         for item in response['Items']:
-            batch.delete_item(Key={'GCalID': item['GCalID']})
+            batch.delete_item(Key={'gCalID': item['gCalID']})
 
 def update_calendar_events():
     # Get items from old and new tables
@@ -123,23 +123,24 @@ def update_calendar_events():
     new_table_items = get_table_items('ap_events_new')
 
     # Compare date and time ranges
-    old_dates = {(item['date'], item['time']) for item in old_table_items}
-    new_dates = {(item['date'], item['time']) for item in new_table_items}
+    old_dates = {(item['times'].split(' - ')[0], item['times'].split(' - ')[1]) for item in old_table_items}
+    new_dates = {(item['times'].split(' - ')[0], item['times'].split(' - ')[1]) for item in new_table_items}
 
     if not new_table_items:
         for item in old_table_items:
-            delete_gcal_event(item['GCalID'])
+            delete_gcal_event(item['gCalID'])
             
         return
     if old_dates != new_dates:
         # Delete old events from Google Calendar
         for item in old_table_items:
-            delete_gcal_event(item['GCalID'])
+            delete_gcal_event(item['gCalID'])
 
         # Add new events to Google Calendar and update new table with gcal event ids
         for item in new_table_items:
-            gcal_event_id = add_gcal_event(item['date'], item['time'])
-            update_table_with_gcal_id('ap_events_new', item['GCalID'], gcal_event_id)
+            start_time, end_time = item['times'].split(' - ')
+            gcal_event_id = add_gcal_event(start_time, end_time)
+            update_table_with_gcal_id('ap_events_new', item['gCalID'], gcal_event_id)
 
         # Copy new table to old table and delete all items from new table
         copy_table('ap_events_new', 'ap_events_old')
