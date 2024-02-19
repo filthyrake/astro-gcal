@@ -124,6 +124,11 @@ def update_calendar_events():
     old_dates = {(item['date'], item['time']) for item in old_table_items}
     new_dates = {(item['date'], item['time']) for item in new_table_items}
 
+    if not new_table_items:
+        for item in old_table_items:
+            delete_gcal_event(item['GCalID'])
+            
+        return
     if old_dates != new_dates:
         # Delete old events from Google Calendar
         for item in old_table_items:
