@@ -3,7 +3,6 @@ import requests
 import boto3
 import os
 import logging
-from botocore.exceptions import ClientError
 from pytz import timezone
 from astral import LocationInfo
 from astral.location import Location
@@ -31,7 +30,6 @@ def get_forecast():
   response = requests.post(API_URL, data=json.dumps(data), headers=headers)
   
   json_object = response.json()
-  print(json_object)
 
 good_seeing_offsets=[]
 good_seeing_transparency_offsets=[]
@@ -49,14 +47,9 @@ dynamodb = boto3.resource('dynamodb')
 # get the tables
 table_new = dynamodb.Table('ap_events_new')
 
-# generate events from the final_good_offsets list
-# events should have start and end times
-# this will be the basis for our calendar event generation later
-# for now we just want something easy to store in the tables/database later
 events = []
 
 # get our astrospheric API key from AWS Secrets Manager
-# to-do: adapt from the default AWS example code
 def get_secret():
     global API_KEY
 
