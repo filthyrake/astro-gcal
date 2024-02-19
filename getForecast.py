@@ -84,10 +84,10 @@ def populate_table(events):
   # Write items to the table
   with table_new.batch_writer() as batch:
       for event in events:
-          # Convert start and end times to strings and set GCalID to "none"
+          # Convert start and end times to strings and set gCalID to "none"
           item = {
               'times': f"{event['start']} - {event['end']}",
-              'GCalID': 'none'
+              'gCalID': 'none'
           }
           batch.put_item(Item=item)
 
