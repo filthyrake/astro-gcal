@@ -1,9 +1,13 @@
 import boto3
 import json
+import logging
 from botocore.exceptions import ClientError
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
+from googleapiclient.errors import HttpError
 from datetime import datetime, timedelta
+
+logging.basicConfig(level=logging.DEBUG)
 
 credentials = service_account.Credentials.from_service_account_file(
     'credentials.json',
@@ -49,32 +53,50 @@ def delete_gcal_event(event_id):
     # Build the service
     service = build('calendar', 'v3', credentials=credentials)
 
-    # Delete the event
-    service.events().delete(calendarId='primary', eventId=event_id).execute()
+    try:
+        # Delete the event
+        service.events().delete(calendarId='primary', eventId=event_id).execute()
+    except HttpError as e:
+        # Check if the error message contains "Resource has been deleted"
+        if "Resource has been deleted" in str(e):
+            # Ignore the error and continue
+            logging.warning(f"Attempted to delete an event that has already been deleted: {event_id}")
+        else:
+            # If the error is something else, re-raise it
+            raise
 
 
 def add_gcal_event(start_time, end_time):
-    # Build the service
-    service = build('calendar', 'v3', credentials=credentials)
+    try:
+        # Log the start and end times
+        logging.debug(f"Adding event with start time {start_time} and end time {end_time}")
+        # Build the service
+        service = build('calendar', 'v3', credentials=credentials)
 
-    # Define the event
-    event = {
-        'summary': 'New Event',
-        'start': {
-            'dateTime': datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S').isoformat(),
-            'timeZone': 'America/Los_Angeles',
-        },
-        'end': {
-            'dateTime': datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S').isoformat(),
-            'timeZone': 'America/Los_Angeles',
-        },
-    }
+        # Define the event
+        event = {
+            'summary': 'New Event',
+            'start': {
+                'dateTime': datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S').isoformat(),
+                'timeZone': 'America/Los_Angeles',
+            },
+            'end': {
+                'dateTime': datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S').isoformat(),
+                'timeZone': 'America/Los_Angeles',
+            },
+        }
 
-    # Add the event to the calendar
-    event = service.events().insert(calendarId='primary', body=event).execute()
+        # Add the event to the calendar
+        event = service.events().insert(calendarId='primary', body=event).execute()
 
-    # Return the ID of the new event
-    return event['id']
+        # Log the response from the Google Calendar API
+        logging.debug(f"Response from Google Calendar API: {event}")
+
+        # Return the ID of the new event
+        return event['id']
+    except Exception as e:
+        logging.error(f"An error occurred while adding the event: {e}")
+        return None
 
 def delete_table_items(table_name):
     # Get the table
@@ -100,8 +122,8 @@ def update_calendar_events():
     if not new_table_items:
         for item in old_table_items:
             delete_gcal_event(item['gCalID'])
-            
         return
+
     if old_dates != new_dates:
         # Delete old events from Google Calendar
         for item in old_table_items:
@@ -121,10 +143,13 @@ def update_calendar_events():
         # Write new items with gcal event ids to old table
         with table_old.batch_writer() as batch:
             for item in new_items_with_gcal_id:
+                # Log the item being written to the table
+                logging.debug(f"Writing item to old table: {item}")
                 batch.put_item(Item=item)
 
-        # Delete all items from new table
-        delete_table_items('ap_events_new')
+        # Only delete items from new table if they have been successfully added to old table
+        for item in new_items_with_gcal_id:
+            delete_table_items('ap_events_new')
 
 def lambda_handler(event, context):
   get_secret()
