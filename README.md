@@ -8,7 +8,7 @@ This is intended to be run out of AWS, using a series of Lambdas and DynamoDB.
 
 Current Status: NOT FULLY WORKING - still in development
 
-Currently we are successfully querying the astrospheric API for the forecast and writing the date/time ranges that meet our predefined requirements to DynamoDB.
+Currently we are successfully querying the astrospheric API for the forecast and writing the date/time ranges that meet our predefined requirements to DynamoDB.  getForecast.py is now functionally complete.
 
 TO-DO:
 * Test code for new/old comparison and calendar event changes
