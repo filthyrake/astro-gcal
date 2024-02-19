@@ -86,7 +86,7 @@ def populate_table(events):
       for event in events:
           # Convert start and end times to strings and set GCalID to "none"
           item = {
-              'times': f"{event['start_time']} - {event['end_time']}",
+              'times': f"{event['start']} - {event['end']}",
               'GCalID': 'none'
           }
           batch.put_item(Item=item)
