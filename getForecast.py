@@ -83,13 +83,17 @@ def time_in_range(start, end, current):
 def populate_table(events):
   # Write items to the table
   with table_new.batch_writer() as batch:
+      added_events = set()
       for event in events:
           # Convert start and end times to strings and set gCalID to "none"
-          item = {
-              'times': f"{event['start']} - {event['end']}",
-              'gCalID': 'none'
-          }
-          batch.put_item(Item=item)
+          times = f"{event['start']} - {event['end']}"
+          if times not in added_events:
+              item = {
+                  'times': times,
+                  'gCalID': 'none'
+              }
+              batch.put_item(Item=item)
+              added_events.add(times)
 
 def lambda_handler(event, context):
   logging.info('Lambda function started')
