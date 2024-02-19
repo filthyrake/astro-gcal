@@ -8,12 +8,8 @@ This is intended to be run out of AWS, using a series of Lambdas and DynamoDB.  
 
 Current Status: NOT FULLY WORKING - still in development
 
-Currently we are successfully querying the astrospheric API for the forecast and writing the date/time ranges that meet our predefined requirements to DynamoDB.  getForecast.py is now functionally complete.
+Currently we are successfully querying the astrospheric API for the forecast and writing the date/time ranges that meet our predefined requirements to DynamoDB.  getForecast.py is now functionally complete.  We are also now able to create Calendar events in Google Calendar when updateTables.py is run.  This is now technically "functionally complete" but I am very much leaving this listed as still in development until I have time to do some more refactoring, code cleanups, write docs, etc...
 
 TO-DO:
-* Test code for new/old comparison and calendar event changes
-* Test GCal integration
 * Add more tests/etc
 * Write installation/usage instructions
-
-Why havent I finished all this yet?  Well, testing is a bit tricky since the weather for my house is actually quite poor at the moment :D so the API doesnt return any events that meet my criteria within the time window it returns.  So I've gotta wait and then I can test and bugfix further.
