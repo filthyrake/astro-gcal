@@ -3,6 +3,7 @@ import requests
 import boto3
 import os
 import logging
+import uuid
 from pytz import timezone
 from astral import LocationInfo
 from astral.location import Location
@@ -10,6 +11,9 @@ from astral.sun import sun
 from itertools import groupby
 from operator import itemgetter
 from datetime import datetime, timedelta
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 API_URL="https://astrosphericpublicaccess.azurewebsites.net/api/GetForecastData_V1"
 LAT = os.environ.get('LAT')
@@ -68,25 +72,28 @@ def get_secret():
     secret_dict = json.loads(secret_string)  # Assuming JSON format
     API_KEY = secret_dict['API_KEY']
 
+def event_exists(events, event):
+    for existing_event in events:
+        if existing_event['start'] == event['start'] and existing_event['end'] == event['end']:
+            return True
+    return False
+
 def time_in_range(start, end, current):
     """Returns whether current is in the range [start, end]"""
     return start <= current <= end
 
-# populate_table function to populate the ap_events_new table in the dynamodb database with the events
 def populate_table(events):
   # Write items to the table
   with table_new.batch_writer() as batch:
-      added_events = set()
       for event in events:
           # Convert start and end times to strings and set gCalID to "none"
           times = f"{event['start']} - {event['end']}"
-          if times not in added_events:
-              item = {
-                  'times': times,
-                  'gCalID': 'none'
-              }
-              batch.put_item(Item=item)
-              added_events.add(times)
+          item = {
+              'id': event['id'],  # Use the unique ID as the key
+              'times': times,
+              'gCalID': 'none'
+          }
+          batch.put_item(Item=item)
 
 def lambda_handler(event, context):
   logging.info('Lambda function started')
@@ -111,17 +118,18 @@ def lambda_handler(event, context):
       final_good_offsets.append(offset)
 
   for k, g in groupby(enumerate(final_good_offsets), lambda ix: ix[0] - ix[1]):
-    temp_list = list(map(itemgetter(1), g))
-    if len(temp_list) > 2:
-      event_start = start_time + timedelta(hours=temp_list[0])
-      event_end = start_time + timedelta(hours=temp_list[-1])
-      event = {
-        'start': event_start,
-        'end': event_end
-      }
-      # Check if event already exists in the list
-      if event not in events:
-        events.append(event)
+      temp_list = list(map(itemgetter(1), g))
+      if len(temp_list) > 2:
+          event_start = start_time + timedelta(hours=temp_list[0])
+          event_end = start_time + timedelta(hours=temp_list[-1])
+          event = {
+              'id': str(uuid.uuid4()),  # Add a unique ID to each event
+              'start': event_start,
+              'end': event_end
+          }
+          # Check if event already exists in the list
+          if not event_exists(events, event):
+              events.append(event)
   # populate "new" table in database
   populate_table(events)
   logging.info('Lambda function completed')
