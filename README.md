@@ -6,10 +6,9 @@ I got tired of constantly keeping an Astrospheric tab open and checking it all t
 This is intended to be run out of AWS, using a series of Lambdas and DynamoDB.  This requires a Pro Astrospheric account in order to get an Astrospheric API key.
 
 
-Current Status: FULLY WORKING (I think) - but very still in development
+Current Status: PARTIALLY WORKING (I think) - but very still in development
 
-Currently we are successfully querying the astrospheric API for the forecast and writing the date/time ranges that meet our predefined requirements to DynamoDB.  getForecast.py is now functionally complete.  We are also now able to create Calendar events in Google Calendar when updateTables.py is run.  This is now technically "functionally complete" but I am very much leaving this listed as still in development until I have time to do some more refactoring, code cleanups, write docs, etc...
-
+Currently we are successfully querying the astrospheric API for the forecast and writing the date/time ranges that meet our predefined requirements to DynamoDB.  getForecast.py is now functionally complete.  We are also now able to create Calendar events in Google Calendar when updateTables.py is run.  There is some weird behavior going on where it isnt creating all of the relevant events, and the time stuff is being wonky.
 TO-DO:
 * Add more tests/etc
 * Write installation/usage instructions
