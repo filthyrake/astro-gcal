@@ -93,26 +93,19 @@ def lambda_handler(event, context):
   get_forecast()
   start_time = datetime.fromisoformat(json_object["LocalStartTime"])
 
-  for offset in json_object['Astrospheric_Seeing']:
-    if offset['Value']['ActualValue'] >= 2:
-      good_seeing_offsets.append(offset['HourOffset'])
+  good_seeing_offsets = [offset['HourOffset'] for offset in json_object['Astrospheric_Seeing'] if offset['Value']['ActualValue'] >= 2]
 
-  for offset in good_seeing_offsets:
-    transparency = json_object['Astrospheric_Transparency'][offset]
-    if transparency['Value']['ActualValue'] <= 23:
-      good_seeing_transparency_offsets.append(transparency['HourOffset'])
+  good_seeing_transparency_offsets = [offset for offset in good_seeing_offsets if json_object['Astrospheric_Transparency'][offset]['Value']['ActualValue'] <= 23]
 
-  for offset in good_seeing_transparency_offsets:
-    cloudcover = json_object['RDPS_CloudCover'][offset]
-    if cloudcover['Value']['ActualValue'] <= 30:
-      good_seeing_transparency_clouds_offsets.append(cloudcover['HourOffset'])
+  good_seeing_transparency_clouds_offsets = [offset for offset in good_seeing_transparency_offsets if json_object['RDPS_CloudCover'][offset]['Value']['ActualValue'] <= 30]
 
+  final_good_offsets = []
   for offset in good_seeing_transparency_clouds_offsets:
     offset_time = start_time + timedelta(hours=offset)
     offset_date = offset_time.date()
-    night_time = sun(city.observer, date=offset_date, tzinfo=final_city.timezone)
+    night_time = sun(city.observer, date=offset_date, tzinfo=city.timezone)
     dusk = night_time['dusk']
-    dawn_time = sun(city.observer, date=(offset_date + timedelta(days=1)), tzinfo=final_city.timezone)
+    dawn_time = sun(city.observer, date=(offset_date + timedelta(days=1)), tzinfo=city.timezone)
     dawn = dawn_time['dawn']  
     if (time_in_range(dusk, dawn, time_zone.localize(offset_time))):
       final_good_offsets.append(offset)
@@ -126,8 +119,9 @@ def lambda_handler(event, context):
         'start': event_start,
         'end': event_end
       }
-      events.append(event)
-
+      # Check if event already exists in the list
+      if event not in events:
+        events.append(event)
   # populate "new" table in database
   populate_table(events)
   logging.info('Lambda function completed')
