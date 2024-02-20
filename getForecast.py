@@ -122,14 +122,19 @@ def lambda_handler(event, context):
       if len(temp_list) > 2:
           event_start = start_time + timedelta(hours=temp_list[0])
           event_end = start_time + timedelta(hours=temp_list[-1])
-          event = {
-              'id': str(uuid.uuid4()),  # Add a unique ID to each event
-              'start': event_start,
-              'end': event_end
-          }
-          # Check if event already exists in the list
-          if not event_exists(events, event):
-              events.append(event)
+          # Adjust event start and end times to be within the range of dawn and dusk
+          event_start = max(event_start, dusk)
+          event_end = min(event_end, dawn)
+          # Check if the event duration is at least 2 hours
+          if event_end - event_start >= timedelta(hours=2):
+              event = {
+                  'id': str(uuid.uuid4()),  # Add a unique ID to each event
+                  'start': event_start,
+                  'end': event_end
+              }
+              # Check if event already exists in the list
+              if not event_exists(events, event):
+                  events.append(event)
   # populate "new" table in database
   populate_table(events)
   logging.info('Lambda function completed')
