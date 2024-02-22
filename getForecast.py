@@ -43,6 +43,7 @@ def get_forecast():
   response = requests.post(API_URL, data=json.dumps(data), headers=headers)
   
   json_object = response.json()
+  print(json_object)
 
 good_seeing_offsets=[]
 good_seeing_transparency_offsets=[]
@@ -96,6 +97,8 @@ def get_google_oauth_credentials_from_secrets_manager():
     return secret_dict['google_oauth_client_id'], secret_dict['google_oauth_client_secret']
 
 def event_exists(events, event):
+    if not events:
+        return False
     for existing_event in events:
         if existing_event['start'] == event['start'] and existing_event['end'] == event['end']:
             return True
@@ -112,7 +115,7 @@ def populate_table(events):
           # convert start and end times to strings and set gCalID to "none"
           times = f"{event['start']} - {event['end']}"
           item = {
-              'id': event['id'], 
+              'uuid': event['id'], 
               'times': times,
               'gCalID': 'none'
           }
@@ -120,29 +123,38 @@ def populate_table(events):
 
 def update_calendar_events(service):
     try:
+        logging.debug("Fetching all items from table...")
         table_items = get_all_items_from_table(table_old)
 
-        table_dates = {(item['times'].split(' - ')[0], item['times'].split(' - ')[1]) for item in table_items}
+        table_dates = {(item['times'].split(' - ')[0], item['times'].split(' - ')[1]) for item in table_items if item['gCalID'] != 'none'}
         new_dates = {(item['times'].split(' - ')[0], item['times'].split(' - ')[1]) for item in events}
 
+        logging.debug(f"Table dates: {table_dates}")
+        logging.debug(f"New dates: {new_dates}")
+
         if not events:
+            logging.debug("No new events. Deleting all existing events from Google Calendar...")
             for item in table_items:
                 delete_event_from_google_calendar(service, item['gCalID'])
             return
 
         if table_dates != new_dates:
+            logging.debug("Dates have changed. Updating Google Calendar events...")
             for item in table_items:
                 delete_event_from_google_calendar(service, item['gCalID'])
 
             items_with_gcal_id = []
             for item in events:
-                start_time, end_time = item['times'].split(' - ')
-                gcal_event_id = add_event_to_google_calendar(service, start_time, end_time)
-                item['gCalID'] = gcal_event_id
-                items_with_gcal_id.append(item)
+              start_time, end_time = item['times'].split(' - ')
+              logging.debug(f"Adding event with start time {start_time} and end time {end_time} to Google Calendar...")
+              gcal_event_id = add_event_to_google_calendar(service, start_time, end_time)
+              item['gCalID'] = gcal_event_id
+              update_item_in_table(table_old, item['times'], item['id'], gcal_event_id)
 
+            logging.debug("Deleting all items from DynamoDB table...")
             delete_all_items_from_table(table_old)
 
+            logging.debug("Writing new items to DynamoDB table...")
             with table_old.batch_writer() as batch:
                 for item in items_with_gcal_id:
                     logging.debug(f"Writing item to table: {item}")
@@ -156,13 +168,15 @@ def get_all_items_from_table(table_old):
     return response['Items']
 
 def delete_event_from_google_calendar(service, event_id):
+    if event_id == 'none':
+        return
     try:
         service.events().delete(calendarId=cal_id, eventId=event_id).execute()
     except HttpError as e:
         if "Resource has been deleted" in str(e):
             logging.warning(f"Attempted to delete an event that has already been deleted: {event_id}")
             # Remove the event from the DynamoDB table
-            table_old.delete_item(Key={'gCalID': event_id})
+            table_old.delete_item(Key={'id': event_id})
         else:
             raise
 
@@ -173,11 +187,11 @@ def add_event_to_google_calendar(service, start_time, end_time):
         event = {
             'summary': 'Good Astro Weather',
             'start': {
-                'dateTime': datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S').isoformat(),
+                'dateTime': datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S%z').isoformat(),
                 'timeZone': 'America/Los_Angeles',
             },
             'end': {
-                'dateTime': datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S').isoformat(),
+                'dateTime': datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S%z').isoformat(),
                 'timeZone': 'America/Los_Angeles',
             },
         }
@@ -198,11 +212,26 @@ def delete_all_items_from_table(table):
 
     with table.batch_writer() as batch:
         for item in response['Items']:
-            batch.delete_item(Key={'gCalID': item['gCalID']})
+            batch.delete_item(Key={'uuid': item['uuid']})
+
+def update_item_in_table(table, times, uuid, gCalID):
+    table.update_item(
+        Key={
+            'uuid': uuid,
+            'times': times
+        },
+        UpdateExpression='SET gCalID = :val1',
+        ExpressionAttributeValues={
+            ':val1': gCalID
+        }
+    )
 
 def lambda_handler(event, context):
   logging.info('Lambda function started')
-  get_forecast()
+  try: get_forecast()
+  except Exception as e:
+    logging.error(f"An error occurred while getting the forecast: {e}")
+    return
   start_time = datetime.fromisoformat(json_object["LocalStartTime"])
 
   #we only consider the seeing "Good" if it's 2 or higher
@@ -223,25 +252,43 @@ def lambda_handler(event, context):
     if (time_in_range(dusk, dawn, time_zone.localize(offset_time))):
       final_good_offsets.append(offset)
 
+  print(final_good_offsets)
   for k, g in groupby(enumerate(final_good_offsets), lambda ix: ix[0] - ix[1]):
       temp_list = list(map(itemgetter(1), g))
+      print(f"Group: {temp_list}")  # print the current group of offsets
       if len(temp_list) > 2:
           event_start = (start_time + timedelta(hours=temp_list[0])).replace(tzinfo=time_zone)
           event_end = (start_time + timedelta(hours=temp_list[-1])).replace(tzinfo=time_zone)
+          print(f"Event start: {event_start}, Event end: {event_end}")  # print the start and end times of the event
           # adjust event start and end times to be within the range of dawn and dusk
+          dusk = sun(city.observer, date=event_start.date(), tzinfo=city.timezone)['dusk']
+          dawn = sun(city.observer, date=(event_end.date() + timedelta(days=1)), tzinfo=city.timezone)['dawn']
           event_start = max(event_start, dusk.replace(tzinfo=time_zone))
           event_end = min(event_end, dawn.replace(tzinfo=time_zone))
+          print(f"Adjusted event start: {event_start}, Adjusted event end: {event_end}")  # print the adjusted start and end times
           # check if the event duration is at least 2 hours
           if event_end - event_start >= timedelta(hours=2):
               event = {
                   'id': str(uuid.uuid4()),  # Add a unique ID to each event
                   'start': event_start,
-                  'end': event_end
+                  'end': event_end,
+                  'times': f"{event_start} - {event_end}"
               }
+              print(f"Event: {event}")  # print the event
               # check if event already exists in the list
               if not event_exists(events, event):
                   events.append(event)
+                  print(f"Event added: {event}")  # print the event that was added
+              else:
+                  print(f"Event already exists: {event}")  # print if the event already exists
+          else:
+              print(f"Event duration is less than 2 hours: {event_end - event_start}")  # print if the event duration is less than 2 hours
+      else:
+          print(f"Group length is less than 2: {len(temp_list)}")  # print if the group length is less than 2
+
   # populate "new" table in database
+  print("Events:\n")
+  print(events)
   populate_table(events)
   google_oauth_client_id, google_oauth_secret_id = get_google_oauth_credentials_from_secrets_manager()
   service = build('calendar', 'v3', credentials=credentials)
